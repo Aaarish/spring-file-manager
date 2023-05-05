@@ -3,7 +3,9 @@ package com.example.filemanager.controller;
 import com.example.filemanager.dto.DeleteFileResponse;
 import com.example.filemanager.dto.FileDownloadResponse;
 import com.example.filemanager.dto.FileUploadResponse;
+import com.example.filemanager.entity.FileEntity;
 import com.example.filemanager.service.FileManagerService;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,5 +43,10 @@ public class FileManagerController {
     @DeleteMapping("/delete/{filename}")
     public ResponseEntity<DeleteFileResponse> deleteFile(@PathVariable("filename") String filename){
         return ResponseEntity.ok(fileManagerService.deleteFile(filename));
+    }
+
+    @GetMapping("/list")
+    public ResponseEntity<List<FileEntity>> listFiles(){
+        return ResponseEntity.ok(fileManagerService.listFiles());
     }
 }

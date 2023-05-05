@@ -20,7 +20,8 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.utils.IoUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -101,5 +102,30 @@ public class FileManagerServiceImpl implements FileManagerService {
         return DeleteFileResponse.builder()
                 .message(deletedFileEntity.getFileName() + " is deleted successfully")
                 .build();
+    }
+
+    @Override
+    public List<FileEntity> listFiles() {
+        List<String> objectKeys = new ArrayList<>();
+        List<FileEntity> s3FileEntities = new ArrayList<>();
+
+        ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .build();
+
+        ListObjectsV2Response listObjectsV2Response = s3Client.listObjectsV2(listObjectsV2Request);
+
+        List<S3Object> s3Objects = listObjectsV2Response.contents();
+
+        for (S3Object s3Object : s3Objects){
+            String objectKey = s3Object.key();
+            objectKeys.add(objectKey);
+        }
+
+        for (String key : objectKeys){
+            s3FileEntities.add(fileEntityRepo.findByFileName(key));
+        }
+
+        return s3FileEntities;
     }
 }
