@@ -5,13 +5,13 @@ import com.example.filemanager.dto.FileDownloadResponse;
 import com.example.filemanager.dto.FileUploadResponse;
 import com.example.filemanager.entity.FileEntity;
 import com.example.filemanager.service.FileManagerService;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.endpoints.internal.Value;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,6 +33,11 @@ public class FileManagerController {
         }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(fileUploadResponseList);
+    }
+
+    @GetMapping("/download/url/{filename}")
+    public ResponseEntity<FileDownloadResponse> getFileUrl(@PathVariable("filename") String filename){
+        return ResponseEntity.ok(fileManagerService.getFileUrl(filename));
     }
 
     @GetMapping(value = "/download/{filename}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

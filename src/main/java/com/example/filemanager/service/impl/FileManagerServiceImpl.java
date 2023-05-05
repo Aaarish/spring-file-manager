@@ -7,19 +7,19 @@ import com.example.filemanager.dto.FileUploadResponse;
 import com.example.filemanager.entity.FileEntity;
 import com.example.filemanager.service.FileManagerService;
 import lombok.RequiredArgsConstructor;
-import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StreamUtils;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.utils.IoUtils;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +29,7 @@ import java.util.UUID;
 public class FileManagerServiceImpl implements FileManagerService {
     private final FileEntityRepo fileEntityRepo;
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
 
     @Value("${amazon.s3.bucket.name}")
     private String bucketName;
@@ -64,12 +65,19 @@ public class FileManagerServiceImpl implements FileManagerService {
 
     @Override
     public FileDownloadResponse getFileUrl(String filename) {
-        GetUrlRequest getUrlRequest = GetUrlRequest.builder()
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
                 .key(filename)
                 .build();
 
-        String url = s3Client.utilities().getUrl(getUrlRequest).toString();
+        GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
+                .getObjectRequest(getObjectRequest)
+                .signatureDuration(Duration.ofMinutes(10))
+                .build();
+
+        PresignedGetObjectRequest presignedGetObjectRequest = s3Presigner.presignGetObject(getObjectPresignRequest);
+
+        String url = presignedGetObjectRequest.url().toString();
 
         return FileDownloadResponse.builder()
                 .downloadUrl(url)
