@@ -49,11 +49,11 @@ public class FileManagerServiceImpl implements FileManagerService {
         s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
 
         //storing file metadata to mongodb local storage
-        FileEntity fileEntity = new FileEntity();
-
-        fileEntity.setFileId(UUID.randomUUID().toString());
-        fileEntity.setFileName(fileName);
-        fileEntity.setFileType(file.getContentType());
+        FileEntity fileEntity = FileEntity.builder()
+                .fileId(UUID.randomUUID().toString())
+                .fileName(fileName)
+                .fileType(file.getContentType())
+                .build();
 
         FileEntity savedFileEntity = fileEntityRepo.save(fileEntity);
 
@@ -72,7 +72,7 @@ public class FileManagerServiceImpl implements FileManagerService {
 
         GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
                 .getObjectRequest(getObjectRequest)
-                .signatureDuration(Duration.ofMinutes(10))
+                .signatureDuration(Duration.ofSeconds(10))
                 .build();
 
         PresignedGetObjectRequest presignedGetObjectRequest = s3Presigner.presignGetObject(getObjectPresignRequest);
