@@ -1,21 +1,16 @@
 package com.example.filemanager.service;
-import com.example.filemanager.dto.DeleteFileResponse;
-import com.example.filemanager.dto.FileDownloadResponse;
-import com.example.filemanager.dto.FileUploadResponse;
-import com.example.filemanager.entity.FileEntity;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+import com.example.filemanager.dto.responses.FileDTO;
+import com.example.filemanager.dto.responses.FileDeleteResponse;
+import com.example.filemanager.dto.responses.FileDownloadResponse;
+
 import java.util.List;
 
 public interface FileManagerService {
-    FileUploadResponse uploadFile(MultipartFile file) throws IOException;
 
-    FileDownloadResponse getFileUrl(String filename);
+    FileDownloadResponse downloadFile(String fileId);
 
-    byte[] downloadFile(String filename);
+    FileDeleteResponse deleteFile(String fileId);
 
-    DeleteFileResponse deleteFile(String filename);
-
-    List<FileEntity> listFiles();
+    List<String> listAllFiles();
 }

@@ -1,139 +1,97 @@
 package com.example.filemanager.service.impl;
 
 import com.example.filemanager.dao.FileEntityRepo;
-import com.example.filemanager.dto.DeleteFileResponse;
-import com.example.filemanager.dto.FileDownloadResponse;
-import com.example.filemanager.dto.FileUploadResponse;
-import com.example.filemanager.entity.FileEntity;
+import com.example.filemanager.dto.responses.FileDTO;
+import com.example.filemanager.dto.responses.FileDeleteResponse;
+import com.example.filemanager.dto.responses.FileDownloadResponse;
 import com.example.filemanager.service.FileManagerService;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.sync.RequestBody;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
-import java.io.IOException;
+import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class FileManagerServiceImpl implements FileManagerService {
-    private final FileEntityRepo fileEntityRepo;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
+    private final FileEntityRepo fileEntityRepo;
+    private final ModelMapper modelMapper;
 
     @Value("${amazon.s3.bucket.name}")
     private String bucketName;
 
     @Override
-    public FileUploadResponse uploadFile(MultipartFile file) throws IOException {
-        String fileName = file.getOriginalFilename();
-
-        //creating request object required to store a file to s3
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(fileName)
-                .contentType(file.getContentType())
-                .build();
-
-        //making request to store a file to s3
-        s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
-
-        //storing file metadata to mongodb local storage
-        FileEntity fileEntity = FileEntity.builder()
-                .fileId(UUID.randomUUID().toString())
-                .fileName(fileName)
-                .fileType(file.getContentType())
-                .build();
-
-        FileEntity savedFileEntity = fileEntityRepo.save(fileEntity);
-
-        //return response
-        return FileUploadResponse.builder()
-                .message(savedFileEntity.getFileName()  + " is uploaded successfully")
-                .build();
-    }
-
-    @Override
-    public FileDownloadResponse getFileUrl(String filename) {
+    public FileDownloadResponse downloadFile(String fileId) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
-                .key(filename)
+                .key(fileId)
                 .build();
 
         GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder()
                 .getObjectRequest(getObjectRequest)
-                .signatureDuration(Duration.ofSeconds(10))
+                .signatureDuration(Duration.ofMinutes(1))
                 .build();
 
-        PresignedGetObjectRequest presignedGetObjectRequest = s3Presigner.presignGetObject(getObjectPresignRequest);
-
-        String url = presignedGetObjectRequest.url().toString();
+        URL presignedDownloadUrl = s3Presigner.presignGetObject(getObjectPresignRequest).url();
 
         return FileDownloadResponse.builder()
-                .downloadUrl(url)
+                .downloadUrl(presignedDownloadUrl.toString())
+                .fileId(fileId)
                 .build();
     }
 
     @Override
-    public byte[] downloadFile(String filename) {
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(bucketName)
-                .key(filename)
-                .build();
-
-        ResponseBytes<GetObjectResponse> objectAsBytes = s3Client.getObjectAsBytes(getObjectRequest);
-
-        return objectAsBytes.asByteArray();
-    }
-
-    @Override
-    public DeleteFileResponse deleteFile(String filename) {
+    @Transactional
+    public FileDeleteResponse deleteFile(String fileId) {
         DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
                 .bucket(bucketName)
-                .key(filename)
+                .key(fileId)
                 .build();
 
         s3Client.deleteObject(deleteObjectRequest);
+        fileEntityRepo.deleteById(fileId);
 
-        FileEntity deletedFileEntity = fileEntityRepo.deleteByFileName(filename);
-
-        return DeleteFileResponse.builder()
-                .message(deletedFileEntity.getFileName() + " is deleted successfully")
+        return FileDeleteResponse.builder()
+                .message("File deleted successfully")
                 .build();
     }
 
     @Override
-    public List<FileEntity> listFiles() {
-        List<String> objectKeys = new ArrayList<>();
-        List<FileEntity> s3FileEntities = new ArrayList<>();
-
+    public List<String> listAllFiles() {
         ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder()
                 .bucket(bucketName)
                 .build();
 
-        ListObjectsV2Response listObjectsV2Response = s3Client.listObjectsV2(listObjectsV2Request);
+        List<String> fileList = new ArrayList<>();
 
-        List<S3Object> s3Objects = listObjectsV2Response.contents();
+        ListObjectsV2Response listObjectsResponse;
+        do {
+            listObjectsResponse = s3Client.listObjectsV2(listObjectsV2Request);
 
-        for (S3Object s3Object : s3Objects){
-            String objectKey = s3Object.key();
-            objectKeys.add(objectKey);
+            List<S3Object> contents = listObjectsResponse.contents();
+            for (S3Object s3Object : contents){
+                fileList.add(s3Object.key());
+            }
+
+            listObjectsV2Request = listObjectsV2Request.toBuilder()
+                    .continuationToken(listObjectsResponse.nextContinuationToken())
+                    .build();
         }
+        while (listObjectsResponse.isTruncated());
 
-        for (String key : objectKeys){
-            s3FileEntities.add(fileEntityRepo.findByFileName(key));
-        }
-
-        return s3FileEntities;
+        return fileList;
     }
+
 }
